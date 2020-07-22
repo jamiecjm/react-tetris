@@ -1,9 +1,37 @@
-.App {
+* {
   font-family: sans-serif;
+}
+
+.Game {
+  text-align: center;
+  display: -moz-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.NextShapesContainer {
+  border: 2px solid black;
+  margin-left: 8px;
+  padding: 16px;
+  width: 120px;
+}
+
+.Home {
   text-align: center;
 }
 
 .display {
   display: inline-block;
   padding: 8px;
+}
+
+.Grid {
+  width: 2em;
+  height: 2em;
+  display: inline-block;
+  border-radius: 3px;
 }
