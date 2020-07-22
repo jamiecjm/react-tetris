@@ -1,0 +1,13 @@
+.Unit {
+  height: 2em;
+  width: 2em;
+  display: inline-block;
+  box-sizing: border-box;
+  margin: 0 2px;
+  box-shadow: 2px 2px #000;
+  border-radius: 3px;
+}
+
+.Shape {
+  display: inline-block;
+}
