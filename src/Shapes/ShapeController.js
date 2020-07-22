@@ -5,9 +5,10 @@ import "./styles.css";
 const ShapeController = props => {
   const { shape } = props;
   const [position, setPosition] = useState(4);
+  const [angle, setAngle] = useState(0);
 
   const getCurrentPositions = () => {
-    return shape.offsets.map(offset => {
+    return shape[angle].offsets.map(offset => {
       return position + offset;
     });
   };
@@ -33,35 +34,9 @@ const ShapeController = props => {
     return grids;
   };
 
-  // const [board, setBoard] = useState(generateGrids);
-  // const rotate = () => {
-  //   const newAngle = angle + 90;
-  //   if (newAngle === 360) {
-  //     setAngle(0);
-  //   } else {
-  //     setAngle(newAngle);
-  //   }
-  //   switch (newAngle) {
-  //     case 90:
-  //       setTransitionY(transitionY - UNIT * shape.height);
-  //       return;
-  //     case 180:
-  //       setTransitionX(transitionX + UNIT * shape.width);
-  //       return;
-  //     case 270:
-  //       setTransitionY(transitionY + UNIT * shape.height);
-  //       return;
-  //     case 360:
-  //       setTransitionX(transitionX - UNIT * shape.width);
-  //       return;
-  //     default:
-  //   }
-  // };
-
-  const move = direction => {
+  const getPositionsInfo = () => {
     const currentPositions = getCurrentPositions();
     let reachLeftWall, reachRightWall, reachBottom, reachTop;
-
     currentPositions.map(p => {
       if (p % 10 === 1) {
         reachLeftWall = true;
@@ -77,24 +52,100 @@ const ShapeController = props => {
       }
       return true;
     });
+
+    return {
+      reachLeftWall,
+      reachRightWall,
+      reachBottom,
+      reachTop
+    };
+  };
+
+  const rotate = () => {
+    if (shape.width === shape.height) {
+      return;
+    }
+
+    const newAngle = angle + 90;
+    if (newAngle === 360) {
+      setAngle(0);
+    } else {
+      setAngle(newAngle);
+    }
+
+    if (shape.width === 4) {
+      const info = getPositionsInfo();
+      if (info.reachLeftWall) {
+        if (angle === 90) {
+          setPosition(position + 2);
+        }
+        if (angle === 270) {
+          setPosition(position + 1);
+        }
+      }
+      if (info.reachRightWall) {
+        if (angle === 90) {
+          setPosition(position - 1);
+        }
+        if (angle === 270) {
+          setPosition(position - 2);
+        }
+      }
+      if (info.reachBottom) {
+        if (angle === 0) {
+          setPosition(position - 20);
+        }
+        if (angle === 180) {
+          setPosition(position - 10);
+        }
+      }
+      if (info.reachTop) {
+        if (angle === 0) {
+          setPosition(position + 10);
+        }
+        if (angle === 180) {
+          setPosition(position + 20);
+        }
+      }
+      return;
+    }
+
+    const currentPositions = getCurrentPositions();
+    if (currentPositions[shape[angle].center] % 10 === 1) {
+      setPosition(position + 1);
+    }
+    if (currentPositions[shape[angle].center] % 10 === 0) {
+      setPosition(position - 1);
+    }
+    if (currentPositions[shape[angle].center] <= 10) {
+      setPosition(position + 10);
+    }
+    if (currentPositions[shape[angle].center] - 190 > 0) {
+      setPosition(position - 10);
+    }
+  };
+
+  const move = direction => {
+    const info = getPositionsInfo();
+
     switch (direction) {
       case "up":
-        if (!reachTop) {
+        if (!info.reachTop) {
           setPosition(position - 10);
         }
         return;
       case "down":
-        if (!reachBottom) {
+        if (!info.reachBottom) {
           setPosition(position + 10);
         }
         return;
       case "left":
-        if (!reachLeftWall) {
+        if (!info.reachLeftWall) {
           setPosition(position - 1);
         }
         return;
       case "right":
-        if (!reachRightWall) {
+        if (!info.reachRightWall) {
           setPosition(position + 1);
         }
         return;
@@ -106,7 +157,7 @@ const ShapeController = props => {
   const keyFunction = event => {
     switch (event.keyCode) {
       case 90:
-        // rotate();
+        rotate();
         return;
       case 37:
         move("left");
@@ -134,9 +185,11 @@ const ShapeController = props => {
   });
 
   return (
-    <div className="GameContainer">
-      <Grids />
-    </div>
+    <>
+      <div className="GameContainer">
+        <Grids />
+      </div>
+    </>
   );
 };
 
