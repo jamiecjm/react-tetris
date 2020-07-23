@@ -1,24 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import _ from "lodash";
 import "./styles.css";
 
 const ShapeController = props => {
-  const { shape } = props;
-  const [position, setPosition] = useState(4);
-  const [angle, setAngle] = useState(0);
+  const {
+    angle,
+    coordinate,
+    dispatch,
+    handleLanded,
+    position,
+    shape,
+    speed
+  } = props;
 
-  const getCurrentPositions = () => {
+  const getCoordinates = (angle, coord) => {
     return shape[angle].offsets.map(offset => {
-      return position + offset;
+      return coord + offset;
     });
   };
 
   const Grids = () => {
-    const currentPositions = getCurrentPositions();
+    const currentCoordinates = getCoordinates(angle, coordinate);
 
     let grids = [];
     _.times(200, i => {
-      if (currentPositions.includes(i + 1)) {
+      if (currentCoordinates.includes(i + 1)) {
         grids.push(
           <div
             className="Grid"
@@ -34,153 +40,148 @@ const ShapeController = props => {
     return grids;
   };
 
-  const getPositionsInfo = () => {
-    const currentPositions = getCurrentPositions();
-    let reachLeftWall, reachRightWall, reachBottom, reachTop;
-    currentPositions.map(p => {
+  const positionInfo = (angle, coord) => {
+    const currentCoordinates = getCoordinates(angle, coord);
+    let reachLeftWall, reachRightWall, topInvalid, bottomInvalid;
+    currentCoordinates.map(p => {
       if (p % 10 === 1) {
         reachLeftWall = true;
       }
       if (p % 10 === 0) {
         reachRightWall = true;
       }
-      if (p - 190 > 0) {
-        reachBottom = true;
+      if (p > 200) {
+        bottomInvalid = true;
       }
-      if (p <= 10) {
-        reachTop = true;
+      if (p <= 0) {
+        topInvalid = true;
       }
       return true;
     });
 
     return {
-      reachLeftWall,
-      reachRightWall,
-      reachBottom,
-      reachTop
+      horizontalInvalid: reachLeftWall && reachRightWall,
+      topInvalid,
+      bottomInvalid
+    };
+  };
+
+  const calibratePosition = (angle, coord) => {
+    let { horizontalInvalid, topInvalid, bottomInvalid } = positionInfo(
+      angle,
+      coord
+    );
+    let newCoordinate = coord;
+    while (horizontalInvalid || topInvalid) {
+      if (horizontalInvalid) {
+        if (position === "left") {
+          newCoordinate += 1;
+        } else {
+          newCoordinate -= 1;
+        }
+      } else {
+        newCoordinate += 10;
+      }
+      const newInfo = positionInfo(angle, newCoordinate);
+      horizontalInvalid = newInfo.horizontalInvalid;
+      topInvalid = newInfo.topInvalid;
+    }
+    return {
+      coord: newCoordinate,
+      bottomInvalid
     };
   };
 
   const rotate = () => {
-    if (shape.width === shape.height) {
+    let newAngle = angle + 90;
+    newAngle = newAngle === 360 ? 0 : newAngle;
+
+    let { coord, bottomInvalid } = calibratePosition(newAngle, coordinate);
+
+    if (bottomInvalid) {
+      handleLanded();
       return;
     }
 
-    const newAngle = angle + 90;
-    if (newAngle === 360) {
-      setAngle(0);
-    } else {
-      setAngle(newAngle);
-    }
-
-    if (shape.width === 4) {
-      const info = getPositionsInfo();
-      if (info.reachLeftWall) {
-        if (angle === 90) {
-          setPosition(position + 2);
-        }
-        if (angle === 270) {
-          setPosition(position + 1);
-        }
+    dispatch({
+      type: "CHANGE_POSITION",
+      values: {
+        angle: newAngle,
+        coordinate: coord
       }
-      if (info.reachRightWall) {
-        if (angle === 90) {
-          setPosition(position - 1);
-        }
-        if (angle === 270) {
-          setPosition(position - 2);
-        }
-      }
-      if (info.reachBottom) {
-        if (angle === 0) {
-          setPosition(position - 20);
-        }
-        if (angle === 180) {
-          setPosition(position - 10);
-        }
-      }
-      if (info.reachTop) {
-        if (angle === 0) {
-          setPosition(position + 10);
-        }
-        if (angle === 180) {
-          setPosition(position + 20);
-        }
-      }
-      return;
-    }
-
-    const currentPositions = getCurrentPositions();
-    if (currentPositions[shape[angle].center] % 10 === 1) {
-      setPosition(position + 1);
-    }
-    if (currentPositions[shape[angle].center] % 10 === 0) {
-      setPosition(position - 1);
-    }
-    if (currentPositions[shape[angle].center] <= 10) {
-      setPosition(position + 10);
-    }
-    if (currentPositions[shape[angle].center] - 190 > 0) {
-      setPosition(position - 10);
-    }
+    });
   };
 
   const move = direction => {
-    const info = getPositionsInfo();
+    let newCoordinate = coordinate;
 
     switch (direction) {
-      case "up":
-        if (!info.reachTop) {
-          setPosition(position - 10);
-        }
-        return;
+      // case "up":
+      //   newCoordinate -= 10;
+      //   break;
       case "down":
-        if (!info.reachBottom) {
-          setPosition(position + 10);
-        }
-        return;
+        newCoordinate += 10;
+        break;
       case "left":
-        if (!info.reachLeftWall) {
-          setPosition(position - 1);
-        }
-        return;
+        newCoordinate -= 1;
+        break;
       case "right":
-        if (!info.reachRightWall) {
-          setPosition(position + 1);
-        }
-        return;
+        newCoordinate += 1;
+        break;
       default:
-        return;
+        break;
     }
+
+    let { coord, bottomInvalid } = calibratePosition(angle, newCoordinate);
+
+    if (bottomInvalid) {
+      handleLanded();
+      return;
+    }
+
+    let remainder = coord % 10;
+
+    dispatch({
+      type: "CHANGE_POSITION",
+      values: {
+        coordinate: coord,
+        position: remainder >= 0 && remainder <= 5 ? "left" : "right"
+      }
+    });
   };
 
   const keyFunction = event => {
     switch (event.keyCode) {
       case 90:
         rotate();
-        return;
+        break;
       case 37:
         move("left");
-        return;
+        break;
       case 38:
         move("up");
-        return;
+        break;
       case 39:
         move("right");
-        return;
+        break;
       case 40:
         move("down");
-        return;
+        break;
       default:
-        return;
+        break;
     }
   };
 
   useEffect(() => {
     document.addEventListener("keydown", keyFunction, false);
 
+    // const dropInterval = setInterval(() => {
+    //   move("down");
+    // }, speed);
+
     return () => {
       document.removeEventListener("keydown", keyFunction, false);
+      // clearInterval(dropInterval);
     };
   });
 
