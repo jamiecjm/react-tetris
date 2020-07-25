@@ -13,21 +13,11 @@ export const shapes = [
     width: 2,
     height: 3,
     color: "#d7ac3a",
-    0: {
-      offsets: [1, 2, 12, 22],
-      center: 2
-    },
-    90: {
-      offsets: [3, 11, 12, 13],
-      center: 2
-    },
-    180: {
-      offsets: [2, 12, 22, 23],
-      center: 1
-    },
-    270: {
-      offsets: [11, 12, 13, 21],
-      center: 1
+    angle: {
+      0: [{ x: 4, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 1 }, { x: 5, y: 2 }],
+      90: [{ x: 6, y: 0 }, { x: 4, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }],
+      180: [{ x: 5, y: 0 }, { x: 5, y: 1 }, { x: 5, y: 2 }, { x: 6, y: 2 }],
+      270: [{ x: 4, y: 1 }, { x: 5, y: 1 }, { x: 6, y: 1 }, { x: 4, y: 2 }]
     }
   },
   {

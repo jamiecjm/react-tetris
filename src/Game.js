@@ -1,53 +1,61 @@
 import React, { useReducer } from "react";
+import _ from "lodash";
 import ShapeController from "./Shapes/ShapeController";
 import { shapes } from "./Shapes/shapes";
 import "./styles.css";
 
 const randomiseShape = () => {
-  const number = Math.floor(Math.random() * 7);
+  const number = Math.floor(Math.random() * 1);
   return shapes[number];
 };
 
-let nextInLine = [
+let currentShape = randomiseShape();
+
+let nextShapes = [
   randomiseShape(),
   randomiseShape(),
   randomiseShape(),
   randomiseShape()
 ];
 
+let gridStatus = [];
+
+_.times(20, i => {
+  let array = [];
+  _.times(10, y => {
+    array.push("#ffffff");
+  });
+  gridStatus.push(array);
+});
+
+currentShape.angle[0].map(({ x, y }) => {
+  return (gridStatus[y][x] = currentShape.color);
+});
+
 const initialState = {
-  currentShape: randomiseShape(),
-  nextShapes: nextInLine,
-  level: {
-    number: 1,
-    speed: 1500
-  },
-  coordinate: 4,
-  angle: 0,
-  position: "left"
+  gridStatus,
+  currentShape,
+  nextShapes,
+  angle: 0
 };
 
 function gameReducer(state, action) {
   const values = action.values;
   switch (action.type) {
-    case "SHUFFLE_SHAPES":
+    case "UPDATE_GRID":
       return {
         ...state,
-        ...values
+        gridStatus: values.gridStatus,
+        currentShape: values.currentShape || state.currentShape,
+        angle: Number.isInteger(values.angle) ? values.angle : state.angle
       };
-    case "LEVEL_UP":
-      const newLevel = {
-        number: state.level.number + 1,
-        speed: state.level.speed - 250
-      };
+    case "HANDLE_LANDED":
       return {
         ...state,
-        level: newLevel
-      };
-    case "CHANGE_POSITION":
-      return {
-        ...state,
-        ...values
+        gridStatus: values.gridStatus,
+        currentShape: values.currentShape,
+        nextShapes: values.nextShapes,
+        angle: initialState.angle
       };
     default:
       return state;
@@ -56,27 +64,70 @@ function gameReducer(state, action) {
 
 export default function Game() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  console.log("state", { state });
 
   const handleLanded = () => {
-    const nextShape = nextInLine[0];
-    nextInLine = state.nextShapes;
-    nextInLine.shift();
-    nextInLine.push(randomiseShape());
+    nextShapes = state.nextShapes;
+    currentShape = nextShapes[0];
+    nextShapes.shift();
+    nextShapes.push(randomiseShape());
+
+    gridStatus = updateGridStatus(
+      state.gridStatus,
+      currentShape.angle[0],
+      currentShape.angle[0]
+    );
+
     dispatch({
-      type: "SHUFFLE_SHAPES",
+      type: "HANDLE_LANDED",
       values: {
-        angle: initialState.angle,
-        coordinate: initialState.coordinate,
-        currentShape: nextShape,
-        nextShapes: nextInLine
+        gridStatus,
+        currentShape,
+        nextShapes
       }
     });
   };
 
+  const updateGridStatus = (
+    gridStatus,
+    previousAngleCoords,
+    newAngleCoords
+  ) => {
+    let newGridStatus = gridStatus;
+
+    previousAngleCoords.map(({ x, y }) => {
+      return (newGridStatus[y][x] = "#ffffff");
+    });
+
+    newAngleCoords.map(({ x, y }) => {
+      return (newGridStatus[y][x] = state.currentShape.color);
+    });
+
+    return newGridStatus;
+  };
+
+  let grid = [];
+
+  _.times(20, i => {
+    let array = [];
+    _.times(10, y => {
+      array.push(
+        <div
+          className="Grid"
+          key={`${i} ${y}`}
+          style={{ backgroundColor: state.gridStatus[i][y] }}
+        >
+          {y} {i}
+        </div>
+      );
+    });
+    grid.push(array);
+  });
+
   const NextShapes = () => {
-    return state.nextShapes.map(shape => {
+    return state.nextShapes.map((shape, index) => {
       return (
-        <div>
+        <div key={`next-shape-${index}`}>
           {shape.component}
           <br />
           <br />
@@ -87,15 +138,14 @@ export default function Game() {
 
   return (
     <div className="Game">
-      {/* <div className="GameContainer">{grids}</div> */}
       <ShapeController
         angle={state.angle}
-        coordinate={state.coordinate}
-        position={state.position}
+        currentShape={state.currentShape}
         dispatch={dispatch}
+        grid={grid}
+        gridStatus={state.gridStatus}
         handleLanded={handleLanded}
-        shape={state.currentShape}
-        speed={state.level.speed}
+        updateGridStatus={updateGridStatus}
       />
       <div className="NextShapesContainer">
         <NextShapes />

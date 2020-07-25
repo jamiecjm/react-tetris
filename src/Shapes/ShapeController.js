@@ -1,197 +1,195 @@
 import React, { useEffect } from "react";
-import _ from "lodash";
 import "./styles.css";
 
 const ShapeController = props => {
   const {
     angle,
-    coordinate,
+    currentShape,
     dispatch,
+    grid,
+    gridStatus,
     handleLanded,
-    position,
-    shape,
-    speed
+    updateGridStatus
   } = props;
 
-  const getCoordinates = (angle, coord) => {
-    return shape[angle].offsets.map(offset => {
-      return coord + offset;
+  useEffect(() => {
+    document.addEventListener("keydown", keyFunction, false);
+
+    return () => {
+      document.removeEventListener("keydown", keyFunction, false);
+    };
+  });
+
+  const adjustPosition = newAngle => {
+    // let xLeft, xRight, yTop, yBottom;
+
+    // const xS = currentShape.angle[newAngle].map(({ x }) => {
+    //   return x;
+    // });
+
+    // const yS = currentShape.angle[newAngle].map(({ y }) => {
+    //   return y;
+    // });
+
+    // xLeft = Math.min(...xS);
+    // xRight = Math.min(...xS);
+    // yTop = Math.min(...yS);
+    // yBottom = Math.max(...yS);
+
+    let xCoords = currentShape.angle[newAngle].find(({ x }) => {
+      return x < 0 || x > 9;
     });
-  };
-
-  const Grids = () => {
-    const currentCoordinates = getCoordinates(angle, coordinate);
-
-    let grids = [];
-    _.times(200, i => {
-      if (currentCoordinates.includes(i + 1)) {
-        grids.push(
-          <div
-            className="Grid"
-            key={`row-${i}`}
-            style={{ backgroundColor: shape.color }}
-          />
-        );
-      } else {
-        grids.push(<div className="Grid" key={`row-${i}`} />);
-      }
+    let yCoords = currentShape.angle[newAngle].find(({ y }) => {
+      return y < 0 || y > 19;
     });
 
-    return grids;
-  };
+    if (xCoords === undefined && yCoords === undefined) {
+      return currentShape.angle;
+    }
 
-  const positionInfo = (angle, coord) => {
-    const currentCoordinates = getCoordinates(angle, coord);
-    let reachLeftWall, reachRightWall, topInvalid, bottomInvalid;
-    currentCoordinates.map(p => {
-      if (p % 10 === 1) {
-        reachLeftWall = true;
-      }
-      if (p % 10 === 0) {
-        reachRightWall = true;
-      }
-      if (p > 200) {
-        bottomInvalid = true;
-      }
-      if (p <= 0) {
-        topInvalid = true;
-      }
+    let xOffset = 0;
+    let yOffset = 0;
+    let newCoords = {};
+
+    if (xCoords && xCoords.x < 0) {
+      xOffset = 0 - xCoords.x;
+    } else if (xCoords && xCoords.x > 9) {
+      xOffset = 9 - xCoords.x;
+    }
+
+    if (yCoords && yCoords.y < 0) {
+      yOffset = 0 - yCoords.y;
+    } else if (yCoords && yCoords.y > 19) {
+      yOffset = 19 - yCoords.y;
+    }
+
+    [0, 90, 180, 270].map(key => {
+      newCoords[key] = currentShape.angle[key].map(({ x, y }) => {
+        x += xOffset;
+        y += yOffset;
+        return {
+          x,
+          y
+        };
+      });
       return true;
     });
 
-    return {
-      horizontalInvalid: reachLeftWall && reachRightWall,
-      topInvalid,
-      bottomInvalid
-    };
-  };
-
-  const calibratePosition = (angle, coord) => {
-    let { horizontalInvalid, topInvalid, bottomInvalid } = positionInfo(
-      angle,
-      coord
-    );
-    let newCoordinate = coord;
-    while (horizontalInvalid || topInvalid) {
-      if (horizontalInvalid) {
-        if (position === "left") {
-          newCoordinate += 1;
-        } else {
-          newCoordinate -= 1;
-        }
-      } else {
-        newCoordinate += 10;
-      }
-      const newInfo = positionInfo(angle, newCoordinate);
-      horizontalInvalid = newInfo.horizontalInvalid;
-      topInvalid = newInfo.topInvalid;
-    }
-    return {
-      coord: newCoordinate,
-      bottomInvalid
-    };
+    return newCoords;
   };
 
   const rotate = () => {
     let newAngle = angle + 90;
     newAngle = newAngle === 360 ? 0 : newAngle;
 
-    let { coord, bottomInvalid } = calibratePosition(newAngle, coordinate);
+    const newCoords = adjustPosition(newAngle);
 
-    if (bottomInvalid) {
-      handleLanded();
-      return;
-    }
+    const newGridStatus = updateGridStatus(
+      gridStatus,
+      currentShape.angle[angle],
+      newCoords[newAngle]
+    );
 
-    dispatch({
-      type: "CHANGE_POSITION",
-      values: {
-        angle: newAngle,
-        coordinate: coord
-      }
-    });
+    return {
+      newGridStatus,
+      newAngle,
+      newCoords
+    };
   };
 
   const move = direction => {
-    let newCoordinate = coordinate;
+    let newCoords = {};
+    let touchedBottom = false;
+    let invalid = false;
 
-    switch (direction) {
-      // case "up":
-      //   newCoordinate -= 10;
-      //   break;
-      case "down":
-        newCoordinate += 10;
-        break;
-      case "left":
-        newCoordinate -= 1;
-        break;
-      case "right":
-        newCoordinate += 1;
-        break;
-      default:
-        break;
+    [0, 90, 180, 270].map(key => {
+      newCoords[key] = currentShape.angle[key].map(({ x, y }) => {
+        switch (direction) {
+          case "up":
+            break;
+          case "down":
+            key === angle
+              ? y < 19
+                ? (y += 1)
+                : (touchedBottom = true)
+              : (y += 1);
+            break;
+          case "left":
+            key === angle ? (x > 0 ? (x -= 1) : (invalid = true)) : (x -= 1);
+            break;
+          case "right":
+            key === angle ? (x < 9 ? (x += 1) : (invalid = true)) : (x += 1);
+            break;
+          default:
+            break;
+        }
+        return {
+          x,
+          y
+        };
+      });
+      return true;
+    });
+
+    if (invalid) {
+      return;
     }
 
-    let { coord, bottomInvalid } = calibratePosition(angle, newCoordinate);
-
-    if (bottomInvalid) {
+    if (touchedBottom) {
       handleLanded();
       return;
     }
 
-    let remainder = coord % 10;
+    const newGridStatus = updateGridStatus(
+      gridStatus,
+      currentShape.angle[angle],
+      newCoords[angle]
+    );
 
-    dispatch({
-      type: "CHANGE_POSITION",
-      values: {
-        coordinate: coord,
-        position: remainder >= 0 && remainder <= 5 ? "left" : "right"
-      }
-    });
+    return {
+      newGridStatus,
+      newAngle: angle,
+      newCoords
+    };
   };
-
   const keyFunction = event => {
+    let props;
     switch (event.keyCode) {
       case 90:
-        rotate();
+        props = rotate();
         break;
       case 37:
-        move("left");
+        props = move("left");
         break;
       case 38:
-        move("up");
+        props = move("up");
         break;
       case 39:
-        move("right");
+        props = move("right");
         break;
       case 40:
-        move("down");
+        props = move("down");
         break;
       default:
         break;
     }
+
+    const { newGridStatus, newAngle, newCoords } = props;
+
+    dispatch({
+      type: "UPDATE_GRID",
+      values: {
+        gridStatus: newGridStatus,
+        angle: newAngle,
+        currentShape: {
+          ...currentShape,
+          angle: newCoords
+        }
+      }
+    });
   };
 
-  useEffect(() => {
-    document.addEventListener("keydown", keyFunction, false);
-
-    // const dropInterval = setInterval(() => {
-    //   move("down");
-    // }, speed);
-
-    return () => {
-      document.removeEventListener("keydown", keyFunction, false);
-      // clearInterval(dropInterval);
-    };
-  });
-
-  return (
-    <>
-      <div className="GameContainer">
-        <Grids />
-      </div>
-    </>
-  );
+  return <div className="GameContainer">{grid}</div>;
 };
 
 export default ShapeController;
