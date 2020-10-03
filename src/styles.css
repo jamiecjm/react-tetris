@@ -35,3 +35,15 @@
   display: inline-block;
   border-radius: 3px;
 }
+
+.GameContainer {
+  border: 2px solid black;
+  height: calc(40em + 38px);
+  width: calc(20em + 18px);
+  margin-right: 8px;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(10, 2em [col-start]);
+  grid-template-rows: repeat(20, 2em [row-start]);
+  grid-gap: 2px;
+}

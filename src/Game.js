@@ -1,155 +1,255 @@
-import React, { useReducer } from "react";
-import _ from "lodash";
-import ShapeController from "./Shapes/ShapeController";
-import { shapes } from "./Shapes/shapes";
+import React, { useEffect, useReducer } from "react";
 import "./styles.css";
+import _ from "lodash";
+import shapes from "./shapes";
+import { HotKeys } from "react-hotkeys";
+import keyMap from "./keymap";
 
-const randomiseShape = () => {
-  const number = Math.floor(Math.random() * 1);
-  return shapes[number];
+const DEFAULT_COLOR = "#fff";
+
+const randomShape = () => {
+  return shapes[Math.floor(Math.random() * 7)];
 };
 
-let currentShape = randomiseShape();
+const initialShape = randomShape();
 
-let nextShapes = [
-  randomiseShape(),
-  randomiseShape(),
-  randomiseShape(),
-  randomiseShape()
-];
-
-let gridStatus = [];
-
-_.times(20, i => {
-  let array = [];
-  _.times(10, y => {
-    array.push("#ffffff");
+const initialGrid = () => {
+  let grids = [];
+  _.times(20, (j) => {
+    let xGrids = [];
+    _.times(10, (i) => {
+      const shape = initialShape.angle[0].find(({ x, y }) => {
+        return i === x && j === y;
+      });
+      if (shape) {
+        xGrids.push(initialShape.color);
+      } else {
+        xGrids.push(DEFAULT_COLOR);
+      }
+    });
+    grids.push(xGrids);
   });
-  gridStatus.push(array);
-});
-
-currentShape.angle[0].map(({ x, y }) => {
-  return (gridStatus[y][x] = currentShape.color);
-});
+  return grids;
+};
 
 const initialState = {
-  gridStatus,
-  currentShape,
-  nextShapes,
-  angle: 0
+  grid: initialGrid(),
+  currentAngle: 0,
+  currentShape: initialShape,
+  currentCoords: initialShape.angle[0],
+  movement: { x: 0, y: 0 }
 };
 
-function gameReducer(state, action) {
-  const values = action.values;
+function reducer(state, action) {
   switch (action.type) {
     case "UPDATE_GRID":
       return {
         ...state,
-        gridStatus: values.gridStatus,
-        currentShape: values.currentShape || state.currentShape,
-        angle: Number.isInteger(values.angle) ? values.angle : state.angle
-      };
-    case "HANDLE_LANDED":
-      return {
-        ...state,
-        gridStatus: values.gridStatus,
-        currentShape: values.currentShape,
-        nextShapes: values.nextShapes,
-        angle: initialState.angle
+        grid: action.newGrid,
+        currentCoords: action.newCoords,
+        currentAngle: action.newAngle,
+        movement: action.newMovement || state.movement,
+        currentShape: action.newShape || state.currentShape
       };
     default:
-      return state;
+      throw new Error();
   }
 }
 
-export default function Game() {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
-  console.log("state", { state });
+const Game = () => {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  console.log("STATE", state);
 
-  const handleLanded = () => {
-    nextShapes = state.nextShapes;
-    currentShape = nextShapes[0];
-    nextShapes.shift();
-    nextShapes.push(randomiseShape());
+  const isValidMove = (coordinates, isNewShape) => {
+    const occupied = coordinates.find(({ x, y }) => {
+      try {
+        let isSelf;
+        if (isNewShape) {
+          isSelf = false;
+        } else {
+          isSelf = state.currentCoords.find(({ x: currentX, y: currentY }) => {
+            return currentX === x && currentY === y;
+          });
+        }
 
-    gridStatus = updateGridStatus(
-      state.gridStatus,
-      currentShape.angle[0],
-      currentShape.angle[0]
-    );
-
-    dispatch({
-      type: "HANDLE_LANDED",
-      values: {
-        gridStatus,
-        currentShape,
-        nextShapes
+        if (state.grid[y][x] !== DEFAULT_COLOR && !isSelf) {
+          return true;
+        }
+        return false;
+      } catch {
+        return true;
       }
     });
+    if (occupied) {
+      return false;
+    }
+    return true;
   };
 
-  const updateGridStatus = (
-    gridStatus,
-    previousAngleCoords,
-    newAngleCoords
-  ) => {
-    let newGridStatus = gridStatus;
+  const handleLanded = () => {
+    let newLine = [];
+    _.times(10, () => {
+      newLine.push(DEFAULT_COLOR);
+    });
+    let newGrid = [];
 
-    previousAngleCoords.map(({ x, y }) => {
-      return (newGridStatus[y][x] = "#ffffff");
+    state.grid.forEach((row) => {
+      const occupiedGrid = row.filter((color) => {
+        return color !== DEFAULT_COLOR;
+      });
+      if (occupiedGrid.length === 10) {
+        newGrid.splice(0, 0, newLine);
+      } else {
+        newGrid.push(row);
+      }
     });
 
-    newAngleCoords.map(({ x, y }) => {
-      return (newGridStatus[y][x] = state.currentShape.color);
-    });
+    const newShape = randomShape();
+    const newCoords = newShape.angle[0];
+    const newMovement = { x: 0, y: 0 };
+    if (isValidMove(newCoords, true)) {
+      newGrid = updateGrid(newGrid, newCoords, newShape.color, false);
+    }
 
-    return newGridStatus;
+    dispatch({
+      type: "UPDATE_GRID",
+      newGrid,
+      newCoords,
+      newAngle: 0,
+      newMovement,
+      newShape
+    });
   };
 
-  let grid = [];
-
-  _.times(20, i => {
-    let array = [];
-    _.times(10, y => {
-      array.push(
-        <div
-          className="Grid"
-          key={`${i} ${y}`}
-          style={{ backgroundColor: state.gridStatus[i][y] }}
-        >
-          {y} {i}
-        </div>
+  const move = (direction) => () => {
+    let newCoords = [];
+    const currentCoords = state.currentCoords;
+    let movement;
+    switch (direction) {
+      case "up":
+        movement = { x: 0, y: -1 };
+        break;
+      case "down":
+        console.log("MOVING DOWN");
+        movement = { x: 0, y: 1 };
+        break;
+      case "left":
+        movement = { x: -1, y: 0 };
+        break;
+      case "right":
+        movement = { x: 1, y: 0 };
+        break;
+      default:
+        break;
+    }
+    newCoords = currentCoords.map(({ x, y }) => {
+      return { x: x + movement.x, y: y + movement.y };
+    });
+    if (isValidMove(newCoords, false)) {
+      const newGrid = updateGrid(
+        state.grid,
+        newCoords,
+        state.currentShape.color,
+        true
       );
-    });
-    grid.push(array);
-  });
+      const newMovement = {
+        x: state.movement.x + movement.x,
+        y: state.movement.y + movement.y
+      };
+      dispatch({
+        type: "UPDATE_GRID",
+        newGrid,
+        newCoords,
+        newAngle: state.currentAngle,
+        newMovement
+      });
+      return;
+    }
+    if (direction === "down") {
+      handleLanded();
+      return;
+    }
+  };
 
-  const NextShapes = () => {
-    return state.nextShapes.map((shape, index) => {
-      return (
-        <div key={`next-shape-${index}`}>
-          {shape.component}
-          <br />
-          <br />
-        </div>
+  const rotate = () => () => {
+    let newAngle = state.currentAngle + 90;
+    if (newAngle === 360) {
+      newAngle = 0;
+    }
+    const newCoords = state.currentShape.angle[newAngle].map(({ x, y }) => {
+      return {
+        x: x + state.movement.x,
+        y: y + state.movement.y
+      };
+    });
+    if (isValidMove(newCoords, false)) {
+      const newGrid = updateGrid(
+        state.grid,
+        newCoords,
+        state.currentShape.color,
+        true
       );
+      dispatch({
+        type: "UPDATE_GRID",
+        newGrid,
+        newCoords,
+        newAngle
+      });
+    }
+  };
+
+  const updateGrid = (grid, newCoords, color, isNewPosition) => {
+    let newGrid = grid;
+    const currentCoords = state.currentCoords;
+    if (isNewPosition) {
+      currentCoords.forEach(({ x, y }) => {
+        newGrid[y][x] = DEFAULT_COLOR;
+      });
+    }
+    newCoords.forEach(({ x, y }) => {
+      newGrid[y][x] = color;
+    });
+
+    return newGrid;
+  };
+
+  const Grid = ({ grid }) => {
+    return grid.map((row, x) => {
+      return row.map((color, y) => {
+        return (
+          <div
+            className="Grid"
+            style={{ backgroundColor: color }}
+            key={`grid-${x}-${y}`}
+          />
+        );
+      });
     });
   };
+
+  const inputHandlers = {
+    MOVE_DOWN: move("down"),
+    MOVE_UP: move("up"),
+    MOVE_LEFT: move("left"),
+    MOVE_RIGHT: move("right"),
+    ROTATE: rotate()
+  };
+
+  // useEffect(() => {
+  //   const interval = setInterval(move("down"), 1000);
+  //   return () => clearInterval(interval);
+  // });
 
   return (
-    <div className="Game">
-      <ShapeController
-        angle={state.angle}
-        currentShape={state.currentShape}
-        dispatch={dispatch}
-        grid={grid}
-        gridStatus={state.gridStatus}
-        handleLanded={handleLanded}
-        updateGridStatus={updateGridStatus}
-      />
-      <div className="NextShapesContainer">
-        <NextShapes />
+    <HotKeys allowChanges handlers={inputHandlers} keyMap={keyMap}>
+      <div className="Game">
+        <div className="GameContainer">
+          <Grid grid={state.grid} />
+        </div>
+        <div className="NextShapeContainer"></div>
       </div>
-    </div>
+    </HotKeys>
   );
-}
+};
+
+export default Game;
