@@ -7,58 +7,76 @@ import keyMap from "./keymap";
 
 const DEFAULT_COLOR = "#fff";
 
-const randomShape = () => {
-  return shapes[Math.floor(Math.random() * 7)];
+const shuffleShapes = () => {
+  let shapesBag = [];
+  let remainingShapes = shapes;
+  _.times(7, () => {
+    const randomShape =
+      remainingShapes[Math.floor(Math.random() * remainingShapes.length)];
+    shapesBag.push(randomShape);
+    remainingShapes = remainingShapes.filter((shape) => shape !== randomShape);
+  });
+  return shapesBag;
 };
 
-const initialShape = randomShape();
+const initialState = () => {
+  let shapesBag = shuffleShapes();
+  const initialShape = shapesBag.shift();
 
-const initialGrid = () => {
-  let grids = [];
+  let grid = [];
   _.times(20, (j) => {
     let xGrids = [];
     _.times(10, (i) => {
-      const shape = initialShape.angle[0].find(({ x, y }) => {
-        return i === x && j === y;
-      });
-      if (shape) {
-        xGrids.push(initialShape.color);
-      } else {
-        xGrids.push(DEFAULT_COLOR);
-      }
+      xGrids.push(DEFAULT_COLOR);
     });
-    grids.push(xGrids);
+    grid.push(xGrids);
   });
-  return grids;
+
+  initialShape.angle[0].forEach(({ x, y }) => {
+    grid[y][x] = initialShape.color;
+  });
+
+  return {
+    grid,
+    currentAngle: 0,
+    currentShape: initialShape,
+    currentCoords: initialShape.angle[0],
+    movement: { x: 0, y: 0 },
+    shapesBag,
+    gamePaused: false
+  };
 };
 
-const initialState = {
-  grid: initialGrid(),
-  currentAngle: 0,
-  currentShape: initialShape,
-  currentCoords: initialShape.angle[0],
-  movement: { x: 0, y: 0 }
-};
-
-function reducer(state, action) {
+const reducer = (state, action) => {
   switch (action.type) {
     case "UPDATE_GRID":
       return {
         ...state,
-        grid: action.newGrid,
-        currentCoords: action.newCoords,
-        currentAngle: action.newAngle,
-        movement: action.newMovement || state.movement,
-        currentShape: action.newShape || state.currentShape
+        ...action
+      };
+    case "PAUSE_GAME":
+      return {
+        ...state,
+        gamePaused: !state.gamePaused
+      };
+    case "RESET_GAME":
+      return {
+        ...initialState()
       };
     default:
       throw new Error();
   }
-}
+};
 
 const Game = () => {
-  const [state, dispatch] = useReducer(reducer, initialState);
-  console.log("STATE", state);
+  const [state, dispatch] = useReducer(reducer, initialState());
+
+  useEffect(() => {
+    if (!state.gamePaused) {
+      const interval = setInterval(move("down"), 1000);
+      return () => clearInterval(interval);
+    }
+  });
 
   const isValidMove = (coordinates, isNewShape) => {
     const occupied = coordinates.find(({ x, y }) => {
@@ -86,14 +104,14 @@ const Game = () => {
     return true;
   };
 
-  const handleLanded = () => {
+  const handleLanded = (grid) => {
     let newLine = [];
     _.times(10, () => {
       newLine.push(DEFAULT_COLOR);
     });
     let newGrid = [];
 
-    state.grid.forEach((row) => {
+    grid.forEach((row) => {
       const occupiedGrid = row.filter((color) => {
         return color !== DEFAULT_COLOR;
       });
@@ -104,24 +122,36 @@ const Game = () => {
       }
     });
 
-    const newShape = randomShape();
+    let shapesBag = state.shapesBag;
+
+    const newShape = shapesBag.shift();
     const newCoords = newShape.angle[0];
     const newMovement = { x: 0, y: 0 };
+
     if (isValidMove(newCoords, true)) {
       newGrid = updateGrid(newGrid, newCoords, newShape.color, false);
     }
 
+    if (shapesBag.length === 0) {
+      shapesBag = shuffleShapes();
+    }
+
     dispatch({
       type: "UPDATE_GRID",
-      newGrid,
-      newCoords,
-      newAngle: 0,
-      newMovement,
-      newShape
+      grid: newGrid,
+      currentCoords: newCoords,
+      currentAngle: 0,
+      movement: newMovement,
+      currentShape: newShape,
+      shapesBag
     });
   };
 
-  const move = (direction) => () => {
+  const move = (direction) => (event) => {
+    if (event) {
+      event.preventDefault();
+    }
+    console.log(`MOVING ${direction}`);
     let newCoords = [];
     const currentCoords = state.currentCoords;
     let movement;
@@ -130,7 +160,6 @@ const Game = () => {
         movement = { x: 0, y: -1 };
         break;
       case "down":
-        console.log("MOVING DOWN");
         movement = { x: 0, y: 1 };
         break;
       case "left":
@@ -158,30 +187,32 @@ const Game = () => {
       };
       dispatch({
         type: "UPDATE_GRID",
-        newGrid,
-        newCoords,
-        newAngle: state.currentAngle,
-        newMovement
+        grid: newGrid,
+        currentCoords: newCoords,
+        movement: newMovement
       });
       return;
     }
     if (direction === "down") {
-      handleLanded();
+      handleLanded(state.grid);
       return;
     }
   };
 
-  const rotate = () => () => {
+  const rotate = () => (event) => {
+    event.preventDefault();
     let newAngle = state.currentAngle + 90;
     if (newAngle === 360) {
       newAngle = 0;
     }
-    const newCoords = state.currentShape.angle[newAngle].map(({ x, y }) => {
+    console.log(`Rotating to ${newAngle} degree`);
+    let newCoords = state.currentShape.angle[newAngle].map(({ x, y }) => {
       return {
         x: x + state.movement.x,
         y: y + state.movement.y
       };
     });
+    newCoords = wallKick(newCoords);
     if (isValidMove(newCoords, false)) {
       const newGrid = updateGrid(
         state.grid,
@@ -191,11 +222,66 @@ const Game = () => {
       );
       dispatch({
         type: "UPDATE_GRID",
-        newGrid,
-        newCoords,
-        newAngle
+        grid: newGrid,
+        currentCoords: newCoords,
+        currentAngle: newAngle
       });
     }
+  };
+
+  const wallKick = (newCoords) => {
+    let wallKickedCoords = newCoords;
+    const movementArray = [
+      { x: 1, y: 0 },
+      { x: 2, y: 0 },
+      { x: -1, y: 0 },
+      { x: -2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: 2 }
+    ];
+
+    movementArray.forEach(({ x: movementX, y: movementY }) => {
+      if (isValidMove(wallKickedCoords, false)) {
+        return;
+      }
+
+      wallKickedCoords = newCoords.map(({ x, y }) => {
+        return {
+          x: x + movementX,
+          y: y + movementY
+        };
+      });
+    });
+
+    return wallKickedCoords;
+  };
+
+  const drop = () => (event) => {
+    console.log("DROPPING");
+    event.preventDefault();
+    let validMove = true;
+    let movementY = 0;
+    let tempMovementY = movementY;
+    let newCoords = state.currentCoords;
+    let tempNewCoords = newCoords;
+
+    while (validMove) {
+      movementY = tempMovementY;
+      newCoords = tempNewCoords;
+      tempMovementY += 1;
+      tempNewCoords = state.currentCoords.map(({ x, y }) => {
+        return { x, y: y + movementY };
+      });
+      validMove = isValidMove(tempNewCoords, false);
+    }
+
+    const newGrid = updateGrid(
+      state.grid,
+      newCoords,
+      state.currentShape.color,
+      true
+    );
+    handleLanded(newGrid);
   };
 
   const updateGrid = (grid, newCoords, color, isNewPosition) => {
@@ -213,6 +299,26 @@ const Game = () => {
     return newGrid;
   };
 
+  const pauseGame = () => (event) => {
+    event.preventDefault();
+    dispatch({ type: "PAUSE_GAME" });
+  };
+
+  const resetGame = () => () => {
+    dispatch({ type: "RESET_GAME" });
+  };
+
+  const inputHandlers = {
+    MOVE_DOWN: move("down"),
+    MOVE_UP: move("up"),
+    MOVE_LEFT: move("left"),
+    MOVE_RIGHT: move("right"),
+    ROTATE: rotate(),
+    PAUSE_GAME: pauseGame(),
+    DROP: drop(),
+    RESET_GAME: resetGame()
+  };
+
   const Grid = ({ grid }) => {
     return grid.map((row, x) => {
       return row.map((color, y) => {
@@ -227,21 +333,8 @@ const Game = () => {
     });
   };
 
-  const inputHandlers = {
-    MOVE_DOWN: move("down"),
-    MOVE_UP: move("up"),
-    MOVE_LEFT: move("left"),
-    MOVE_RIGHT: move("right"),
-    ROTATE: rotate()
-  };
-
-  // useEffect(() => {
-  //   const interval = setInterval(move("down"), 1000);
-  //   return () => clearInterval(interval);
-  // });
-
   return (
-    <HotKeys allowChanges handlers={inputHandlers} keyMap={keyMap}>
+    <HotKeys allowChanges handlers={inputHandlers} keyMap={keyMap} root>
       <div className="Game">
         <div className="GameContainer">
           <Grid grid={state.grid} />
